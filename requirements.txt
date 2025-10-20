@@ -1,0 +1,16 @@
+# ThucChien AI SDK Requirements
+
+# Core dependencies
+openai>=1.0.0
+requests>=2.31.0
+Pillow>=10.0.0
+
+# Optional dependencies for enhanced functionality
+python-dotenv>=1.0.0  # For environment variable management
+tqdm>=4.66.0  # For progress bars
+
+# Development dependencies (optional)
+pytest>=7.4.0  # For testing
+black>=23.0.0  # For code formatting
+flake8>=6.1.0  # For linting
+
