@@ -6,7 +6,7 @@ A comprehensive Python SDK for the [ThucChien.ai](https://thucchien.ai) API, pro
 
 - 🤖 **Text Generation**: Single-turn and multi-turn conversations with GPT models
 - 🎨 **Image Generation**: Create images from text with DALL-E models
-- ✏️ **Image Editing**: Edit and create variations of existing images
+- ✏️ **Image Editing**: Edit existing images
 - 🎬 **Video Generation**: Generate videos from text or animate images
 - 🔊 **Text-to-Speech**: Convert text to natural-sounding speech with multiple voices
 - 💬 **Multi-turn Conversations**: Maintain conversation context across multiple interactions
@@ -119,7 +119,7 @@ for chunk in stream:
 
 #### Chat-based Image Generation (Gemini)
 
-Generate images through the chat completions endpoint using Gemini models:
+Generate images through the chat completions endpoint using Gemini models with support for aspect ratios and input images:
 
 ```python
 from thucchien_ai_sdk import ThucChienClient, ImageGenerator
@@ -127,11 +127,53 @@ from thucchien_ai_sdk import ThucChienClient, ImageGenerator
 client = ThucChienClient()
 img_generator = ImageGenerator(client)
 
-# Generate image via chat endpoint
+# Generate image via chat endpoint with aspect ratio
 result = img_generator.chat_generate_image(
     prompt="A futuristic cityscape at sunset with flying cars and neon lights",
     model="gemini-2.5-flash-image-preview",
+    aspect_ratio="16:9",  # Supported: "1:1", "3:4", "4:3", "9:16", "16:9"
     save_path="outputs/city.png"
+)
+
+# Generate image with input image
+result = img_generator.chat_generate_image(
+    prompt="Make this image more vibrant and add a sunset",
+    input_images=["path/to/image.png"],
+    aspect_ratio="1:1",
+    save_path="outputs/edited.png"
+)
+```
+
+#### Multimodal Conversation
+
+Create multi-turn conversations with text and image inputs/outputs:
+
+```python
+# Create a multimodal conversation
+conversation = img_generator.create_conversation(
+    system_message="You are a creative AI assistant."
+)
+
+# Turn 1: Generate an image
+result1 = conversation.send(
+    text="Create a cute cat",
+    aspect_ratio="1:1",
+    save_path="outputs/cat_v1.png"
+)
+
+# Turn 2: Modify based on context
+result2 = conversation.send(
+    text="Now add a wizard hat",
+    aspect_ratio="1:1",
+    save_path="outputs/cat_v2.png"
+)
+
+# Turn 3: Include an input image
+result3 = conversation.send(
+    text="Make this cat sit in a magical forest",
+    image_paths=["outputs/existing_image.png"],
+    aspect_ratio="16:9",
+    save_path="outputs/cat_v3.png"
 )
 ```
 
@@ -141,10 +183,7 @@ result = img_generator.chat_generate_image(
 # Generate image with DALL-E
 result = img_generator.text_to_image(
     prompt="A futuristic city with flying cars at night",
-    model="dall-e-3",
-    size="1024x1024",
-    quality="hd",
-    style="vivid",
+    model="imagen-4",
     save_path="outputs/futuristic_city.png"
 )
 ```
@@ -157,17 +196,6 @@ result = img_generator.edit_image(
     image_path="outputs/landscape.png",
     prompt="Add a rainbow in the sky",
     save_path="outputs/landscape_with_rainbow.png"
-)
-```
-
-#### Image Variations
-
-```python
-# Create variations
-result = img_generator.create_variation(
-    image_path="outputs/portrait.png",
-    n=3,
-    save_path="outputs/portrait_variation.png"
 )
 ```
 
@@ -285,11 +313,17 @@ client = ThucChienClient(api_key="your-key", base_url="https://api.thucchien.ai/
 
 ### ImageGenerator
 
-- `chat_generate_image(prompt, model, save_path, messages)` - Generate via chat endpoint (Gemini)
+- `chat_generate_image(prompt, model, save_path, messages, aspect_ratio, input_images)` - Generate via chat endpoint with aspect ratios and input images (Gemini)
 - `text_to_image(prompt, model, size, quality, ...)` - Generate images (DALL-E)
 - `edit_image(image_path, prompt, mask_path, ...)` - Edit images
-- `create_variation(image_path, n, size, ...)` - Create variations
+- `create_conversation(system_message, model)` - Create multimodal conversation session
 - `create_editing_session(initial_image_path, model)` - Multi-turn editing
+
+### MultimodalConversation
+
+- `send(text, image_paths, aspect_ratio, save_path)` - Send message with optional images and aspect ratio
+- `get_history()` - Get conversation history
+- `clear_history(keep_system)` - Clear conversation history
 
 ### VideoGenerator
 
@@ -310,9 +344,36 @@ See the `examples/` directory for complete working examples:
 
 - `examples/text_generation_demo.py` - Text generation examples
 - `examples/image_generation_demo.py` - Image generation examples
+- `examples/multimodal_chat_demo.py` - Multimodal chat with images and aspect ratios
+- `examples/multimodal_chat_terminal.py` - Interactive terminal chat interface
 - `examples/video_generation_demo.py` - Video generation examples
 - `examples/text_to_speech_demo.py` - TTS examples
 - `examples/complete_workflow.py` - End-to-end creative workflow
+
+### Interactive Terminal Chat
+
+Run the interactive multimodal chat terminal:
+
+```bash
+python examples/multimodal_chat_terminal.py
+```
+
+Features:
+- Multi-turn conversations with full context
+- Text and image inputs
+- Image generation with aspect ratios (1:1, 3:4, 4:3, 9:16, 16:9)
+- Simple command-based interface
+
+Example session:
+```
+💬 You: /ratio 16:9
+💬 You: Create a beautiful mountain landscape
+
+🤖 Assistant: [Generates image with 16:9 aspect ratio]
+
+💬 You: /image outputs/existing.png
+💬 You: Make this image look like it was painted by Van Gogh
+```
 
 ## Advanced Usage
 
@@ -364,13 +425,19 @@ result = video_gen.text_to_video(
 - **Gemini Chat-based**: Use `chat_generate_image()` for conversational image generation
   - Returns base64-encoded images
   - Supports multi-turn refinement
+  - Supports aspect ratios: "1:1", "3:4", "4:3", "9:16", "16:9"
+  - Supports input images for editing and analysis
   - Model: `gemini-2.5-flash-image-preview`
-- **DALL-E**: Use `text_to_image()` for high-quality generation
-  - DALL-E 3: Single high-quality images, better prompt adherence
-  - DALL-E 2: Multiple variations, editing support
+- **Aspect Ratios**:
+  - `1:1` - Square images, perfect for social media
+  - `3:4` - Portrait orientation, good for prints
+  - `4:3` - Standard photo ratio
+  - `9:16` - Vertical/mobile, ideal for stories
+  - `16:9` - Widescreen/landscape, great for banners
 - Be specific and descriptive in prompts
 - Include style keywords: "photorealistic", "oil painting", etc.
 - Specify lighting and composition
+- Use multimodal conversations for iterative refinement
 
 ### Video Generation
 

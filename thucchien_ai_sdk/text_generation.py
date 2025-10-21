@@ -20,18 +20,15 @@ class TextGenerator:
             client: ThucChienClient instance
         """
         self.client = client
-        openai.api_key = client.get_api_key()
-        openai.api_base = client.get_base_url()
+        self.openai_client = openai.OpenAI(api_key=client.get_api_key(), base_url=client.get_base_url())
         
     def generate(
         self,
         prompt: str,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gemini-2.5-flash",
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         top_p: float = 1.0,
-        frequency_penalty: float = 0.0,
-        presence_penalty: float = 0.0,
         system_message: Optional[str] = None,
     ) -> str:
         """
@@ -39,12 +36,10 @@ class TextGenerator:
         
         Args:
             prompt: The text prompt to generate from
-            model: Model to use (gpt-3.5-turbo, gpt-4, etc.)
+            model: Model to use (gemini-2.5-flash, gpt-4, etc.)
             temperature: Controls randomness (0.0 to 2.0)
             max_tokens: Maximum tokens to generate
             top_p: Nucleus sampling parameter
-            frequency_penalty: Reduces repetition (-2.0 to 2.0)
-            presence_penalty: Encourages new topics (-2.0 to 2.0)
             system_message: Optional system message to set context
             
         Returns:
@@ -57,27 +52,23 @@ class TextGenerator:
         
         messages.append({"role": "user", "content": prompt})
         
-        response = openai.ChatCompletion.create(
+        response = self.openai_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
         )
         
-        return response.choices[0].message['content']
+        return response.choices[0].message.content
     
     def chat(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-3.5-turbo",
+        model: str = "gemini-2.5-flash",
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         top_p: float = 1.0,
-        frequency_penalty: float = 0.0,
-        presence_penalty: float = 0.0,
         stream: bool = False,
     ) -> Any:
         """
@@ -90,33 +81,29 @@ class TextGenerator:
             temperature: Controls randomness
             max_tokens: Maximum tokens to generate
             top_p: Nucleus sampling parameter
-            frequency_penalty: Reduces repetition
-            presence_penalty: Encourages new topics
             stream: Whether to stream the response
             
         Returns:
             Generated response (str if not streaming, generator if streaming)
         """
-        response = openai.ChatCompletion.create(
+        response = self.openai_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
             stream=stream,
         )
         
         if stream:
             return response
         else:
-            return response.choices[0].message['content']
+            return response.choices[0].message.content
     
     def create_conversation(
         self,
         system_message: Optional[str] = None,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gemini-2.5-flash",
     ) -> 'Conversation':
         """
         Create a conversation session for multi-turn interactions.
@@ -140,7 +127,7 @@ class Conversation:
         self,
         text_generator: TextGenerator,
         system_message: Optional[str] = None,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gemini-2.5-flash",
     ):
         """
         Initialize a conversation session.
@@ -250,7 +237,7 @@ def example_multi_turn_conversation(client: ThucChienClient):
     # Create a conversation
     conversation = generator.create_conversation(
         system_message="You are a helpful coding assistant.",
-        model="gpt-3.5-turbo",
+        model="gemini-2.5-flash",
     )
     
     # First turn

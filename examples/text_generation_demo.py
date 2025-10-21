@@ -25,7 +25,7 @@ def demo_simple_generation():
     response = generator.generate(
         prompt=prompt,
         temperature=0.8,
-        model="gpt-3.5-turbo"
+        model="gemini-2.5-flash"
     )
     
     print(f"\nResponse:\n{response}")
@@ -64,7 +64,7 @@ def demo_multi_turn_conversation():
     # Create conversation
     conversation = generator.create_conversation(
         system_message="You are a knowledgeable Python programming tutor.",
-        model="gpt-3.5-turbo"
+        model="gemini-2.5-flash"
     )
     
     # Turn 1
@@ -171,7 +171,7 @@ def demo_conversation_context():
     
     conversation = generator.create_conversation(
         system_message="You are a helpful assistant.",
-        model="gpt-3.5-turbo"
+        model="gemini-2.5-flash"
     )
     
     print("\n[User]: My favorite color is blue.")

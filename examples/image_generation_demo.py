@@ -51,8 +51,7 @@ def demo_simple_text_to_image():
     try:
         result = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-3",
-            size="1024x1024",
+            model="imagen-4",
             quality="standard",
             save_path="../outputs/zen_garden.png"
         )
@@ -85,10 +84,7 @@ def demo_high_quality_image():
     try:
         result = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-3",
-            size="1792x1024",  # Wide format
-            quality="hd",
-            style="vivid",
+            model="imagen-4",
             save_path="../outputs/cyberpunk_street.png"
         )
         print(f"\n✓ High quality image generated!")
@@ -113,9 +109,8 @@ def demo_multiple_variations():
     try:
         result = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-2",  # dall-e-2 supports multiple images
+            model="imagen-4",  # imagen-4 supports multiple images
             n=4,
-            size="512x512",
             save_path="../outputs/robot_mascot.png"
         )
         print(f"\n✓ Generated {len(result.get('data', []))} variations!")
@@ -145,8 +140,7 @@ def demo_portrait_generation():
     try:
         result = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-3",
-            size="1024x1024",
+            model="imagen-4",
             quality="hd",
             style="natural",
             save_path="../outputs/professional_portrait.png"
@@ -181,8 +175,7 @@ def demo_artistic_styles():
         try:
             result = img_gen.text_to_image(
                 prompt=prompt,
-                model="dall-e-3",
-                size="1024x1024",
+                model="imagen-4",
                 save_path=f"../outputs/lighthouse_{style_name}.png"
             )
             print(f"  ✓ Generated and saved")
@@ -211,8 +204,7 @@ def demo_product_photography():
     try:
         result = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-3",
-            size="1024x1024",
+            model="imagen-4",
             quality="hd",
             save_path="../outputs/watch_product.png"
         )
@@ -231,7 +223,7 @@ def demo_multi_turn_editing():
     img_gen = ImageGenerator(client)
     
     # Create an editing session
-    session = img_gen.create_editing_session(model="dall-e-3")
+    session = img_gen.create_editing_session(model="imagen-4")
     
     print("\nStarting iterative image creation...")
     
@@ -294,10 +286,7 @@ def demo_fantasy_scene():
     try:
         result = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-3",
-            size="1024x1024",
-            quality="hd",
-            style="vivid",
+            model="imagen-4",
             save_path="../outputs/fantasy_library.png"
         )
         print(f"\n✓ Fantasy scene created!")

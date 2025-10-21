@@ -199,8 +199,7 @@ def demo_comparison_with_dalle():
     try:
         result2 = img_gen.text_to_image(
             prompt=prompt,
-            model="dall-e-3",
-            size="1024x1024",
+            model="imagen-4",
             save_path="../outputs/comparison_dalle.png"
         )
         print("  ✓ Generated: outputs/comparison_dalle.png")

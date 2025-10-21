@@ -69,9 +69,7 @@ def workflow_story_creation():
     try:
         character_result = img_gen.text_to_image(
             prompt=character_prompt,
-            model="dall-e-3",
-            size="1024x1024",
-            quality="hd",
+            model="imagen-4",
             save_path="../outputs/workflow_character.png"
         )
         print("✓ Character image created: outputs/workflow_character.png")
@@ -193,8 +191,7 @@ def workflow_marketing_campaign():
     try:
         img_gen.text_to_image(
             prompt=product_prompt,
-            model="dall-e-3",
-            quality="hd",
+            model="imagen-4",
             save_path="../outputs/workflow_product.png"
         )
         print("✓ Product image created")
@@ -264,7 +261,7 @@ def workflow_educational_content():
     try:
         img_gen.text_to_image(
             prompt=jupiter_prompt,
-            model="dall-e-3",
+            model="imagen-4",
             save_path="../outputs/workflow_jupiter.png"
         )
         print("✓ Illustration created")
