@@ -5,7 +5,10 @@ Client module for ThucChien.ai API authentication and configuration.
 import os
 from typing import Optional
 import openai
+from dotenv import load_dotenv
 
+
+load_dotenv()
 
 class ThucChienClient:
     """

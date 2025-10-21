@@ -2,56 +2,13 @@
 Image generation and editing module with multi-turn conversation support.
 """
 
-import os
-import base64
 import requests
 from typing import Optional, List, Dict, Union
 import random
 import json
-import mimetypes
 
 from .client import ThucChienClient
-
-
-def save_images(image_data: bytes, save_path: str):
-    """
-    Save an image to a file.
-    """
-    with open(save_path, 'wb') as f:
-        f.write(image_data)
-    print(f"Image saved to: {save_path}")
-
-def ensure_bytes_from_base64(base64_string: str) -> bytes:
-    """
-    Convert a base64 string to bytes.
-    """
-    if ',' in base64_string and base64_string.strip().startswith("data:"):
-        header, encoded = base64_string.split(',', 1)
-    else:
-        encoded = base64_string
-    return base64.b64decode(encoded)
-
-def to_base64(image: Union[str, bytes]) -> (str, str):
-    """
-    Return a base64 string of the image (neither path nor bytes).
-    """
-    data = None
-    mime_type = None
-    if isinstance(image, str):
-        with open(image, 'rb') as f:
-            b64 = base64.b64encode(f.read()).decode('utf-8')
-            mime_type = mimetypes.guess_type(image)[0]
-            if not mime_type:
-                mime_type = "image/png"
-
-    elif isinstance(image, (bytes, bytearray)):
-        data = bytes(image)
-        mime_type = "image/png"
-    else:
-        raise ValueError("Invalid image type")
-    
-    b64 = base64.b64encode(data).decode('utf-8')
-    return b64, mime_type
+from .utils import save_images, ensure_bytes_from_base64, to_base64
 
 
 class ImageGenerator:
@@ -253,3 +210,28 @@ class ImageEditor:
         return image_data
 
 
+if __name__ == "__main__":
+
+    client = ThucChienClient()
+    image_gen = ImageGenerator(client)
+    image_editor = ImageEditor(client)
+
+    # Example 3: Image editing (requires an existing image)
+    print("\n3️⃣  Image Editing")
+    print("-" * 60)
+    
+    # First, check if we have an image to edit
+    import os
+    if os.path.exists("outputs/standard_image_1.png"):
+        edit_prompt = "Add a small boat on the lake"
+        print(f"Edit prompt: {edit_prompt}")
+        
+        edited_image = image_editor.edit_image(
+            prompt=edit_prompt,
+            image="outputs/standard_image_1.png",
+            aspect_ratio="16:9",
+            save_path="outputs/edited_image.png"
+        )
+        print("✅ Image edited successfully")
+    else:
+        print("⚠️  No image found to edit. Run standard generation first.")

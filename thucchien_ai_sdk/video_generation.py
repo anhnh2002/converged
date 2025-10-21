@@ -16,15 +16,10 @@ import json
 import os
 import time
 import requests
-from typing import Optional
+from typing import Optional, Union
 
 from .client import ThucChienClient
-
-from google import genai
-
-client = genai.Client(
-    
-)
+from .utils import to_base64
 
 
 class VeoVideoGenerator:
@@ -45,24 +40,46 @@ class VeoVideoGenerator:
             "Content-Type": "application/json"
         }
     
-    def generate_video(self, prompt: str) -> Optional[str]:
+    def generate_video(
+        self,
+        prompt: str,
+        image: Optional[Union[str, bytes]] = None,
+        aspect_ratio: Optional[str] = None,
+        seed: Optional[int] = 42,
+    ) -> Optional[str]:
         """
-        Initiate video generation with Veo.
+        Initiate video generation with Veo. The video will have 8 seconds duration. Note that video can include every kind of audio (speech, music, etc.).
         
         Args:
             prompt: Text description of the video to generate
-            
+            image: Path to the input image or bytes of the image, if provided, the video will be generated from the image
+            aspect_ratio: Aspect ratio ("16:9" or "9:16")
+            seed: Seed for the video generation
         Returns:
             Operation name if successful, None otherwise
         """
-        print(f"🎬 Generating video with prompt: '{prompt}'")
+        print(f"🎬 Generating video with prompt: '{prompt[:20]}...'")
         
         url = f"{self.base_url}/models/veo-3.0-generate-preview:predictLongRunning"
         payload = {
             "instances": [{
                 "prompt": prompt
-            }]
+            }],
+            "parameters": {
+                "seed": seed
+            }
         }
+
+        if image:
+            b64, mime_type = to_base64(image)
+            payload["instances"][0]["image"] = {
+                "bytesBase64Encoded": b64,
+                "mimeType": mime_type
+            }
+
+
+        if aspect_ratio:
+            payload["parameters"]["aspectRatio"] = aspect_ratio
         
         try:
             response = requests.post(url, headers=self.headers, json=payload)
@@ -149,13 +166,13 @@ class VeoVideoGenerator:
         print(f"⏰ Timeout after {max_wait_time} seconds")
         return None
     
-    def download_video(self, video_uri: str, output_path: str = "generated_video.mp4") -> bool:
+    def download_video(self, video_uri: str, output_filename: str = "generated_video.mp4") -> bool:
         """
         Download the generated video file.
         
         Args:
             video_uri: URI of the video to download (from Google's response)
-            output_path: Local filename to save the video
+            output_filename: Local filename to save the video
             
         Returns:
             True if download successful, False otherwise
@@ -164,13 +181,22 @@ class VeoVideoGenerator:
         print(f"Original URI: {video_uri}")
         
         # Convert Google URI to LiteLLM proxy URI
-        # Example: files/abc123 -> /gemini/v1beta/files/abc123:download?alt=media
-        if video_uri.startswith("files/"):
-            download_path = f"{video_uri}:download?alt=media"
+        # Example: https://generativelanguage.googleapis.com/v1beta/files/abc123 -> /gemini/download/v1beta/files/abc123:download?alt=media
+        if video_uri.startswith("https://generativelanguage.googleapis.com/"):
+            relative_path = video_uri.replace(
+                "https://generativelanguage.googleapis.com/",
+                ""
+            )
         else:
-            download_path = video_uri
-            
-        litellm_download_url = f"{self.base_url}/{download_path}"
+            relative_path = video_uri
+
+        # base_url: https://api.thucchien.ai/gemini/v1beta
+        if self.base_url.endswith("/v1beta"):
+            base_path = self.base_url.replace("/v1beta", "/download")
+        else:
+            base_path = self.base_url
+
+        litellm_download_url = f"{base_path}/{relative_path}"
         print(f"Download URL: {litellm_download_url}")
         
         try:
@@ -184,7 +210,7 @@ class VeoVideoGenerator:
             response.raise_for_status()
             
             # Save video file
-            with open(output_path, 'wb') as f:
+            with open(output_filename, 'wb') as f:
                 downloaded_size = 0
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -196,16 +222,16 @@ class VeoVideoGenerator:
                             print(f"📦 Downloaded {downloaded_size / (1024*1024):.1f} MB...")
             
             # Verify file was created and has content
-            if os.path.exists(output_path):
-                file_size = os.path.getsize(output_path)
+            if os.path.exists(output_filename):
+                file_size = os.path.getsize(output_filename)
                 if file_size > 0:
                     print(f"✅ Video downloaded successfully!")
-                    print(f"📁 Saved as: {output_path}")
+                    print(f"📁 Saved as: {output_filename}")
                     print(f"📏 File size: {file_size / (1024*1024):.2f} MB")
                     return True
                 else:
                     print("❌ Downloaded file is empty")
-                    os.remove(output_path)
+                    os.remove(output_filename)
                     return False
             else:
                 print("❌ File was not created")
@@ -218,12 +244,22 @@ class VeoVideoGenerator:
                 print(f"Response headers: {dict(e.response.headers)}")
             return False
     
-    def generate_and_download(self, prompt: str, output_path: str = None) -> bool:
+    def generate_and_download(
+        self,
+        prompt: str,
+        image: Optional[Union[str, bytes]] = None,
+        aspect_ratio: Optional[str] = None,
+        seed: Optional[int] = 42,
+        output_path: str = None,
+    ) -> bool:
         """
-        Complete workflow: generate video and download it.
+        Complete workflow: generate 8 seconds video and download it.
         
         Args:
             prompt: Text description for video generation
+            image: Path to the input image or bytes of the image, if provided, the video will be generated from the image
+            aspect_ratio: Aspect ratio ("16:9" or "9:16")
+            seed: Seed for the video generation
             output_path: Output filename (auto-generated if None)
             
         Returns:
@@ -233,14 +269,14 @@ class VeoVideoGenerator:
         if output_path is None:
             timestamp = int(time.time())
             safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            output_path = f"veo_video_{safe_prompt.replace(' ', '_')}_{timestamp}.mp4"
+            output_path = f"outputs/veo_video_{safe_prompt.replace(' ', '_')}_{timestamp}_{seed}.mp4"
         
         print("=" * 60)
         print("🎬 VEO VIDEO GENERATION WORKFLOW")
         print("=" * 60)
         
         # Step 1: Generate video
-        operation_name = self.generate_video(prompt)
+        operation_name = self.generate_video(prompt, image, aspect_ratio, seed)
         if not operation_name:
             return False
         
@@ -266,7 +302,6 @@ class VeoVideoGenerator:
 
 
 def main():
-    
     print("🚀 Starting Veo Video Generation Example")
     
     # Initialize generator
