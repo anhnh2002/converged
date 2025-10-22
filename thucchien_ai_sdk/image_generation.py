@@ -3,7 +3,7 @@ Image generation and editing module with multi-turn conversation support.
 """
 
 import requests
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Any
 import random
 import json
 
@@ -11,10 +11,11 @@ from .client import ThucChienClient
 from .utils import save_images, ensure_bytes_from_base64, to_base64
 
 
-class ImageGenerator:
+class StandardImageGenerator:
     """
-    Image generation and editing capabilities.
-    Supports text-to-image, image-to-image (editing), and chat-based generation.
+    Image generation capabilities.
+    Supports text-to-image generation.
+    Especially useful for generating standalone images without needs of consistency
     """
     
     def __init__(self, client: ThucChienClient):
@@ -38,7 +39,6 @@ class ImageGenerator:
         self,
         prompt: str,
         n: int = 1,
-        image_size: str = "1k",
         aspect_ratio: str = "1:1",
         add_random_suffix: bool = True,
         save_path: Optional[str] = None,
@@ -49,7 +49,6 @@ class ImageGenerator:
         Args:
             prompt: Text description of the image to generate
             n: Number of images to generate (1-4 for imagen-4)
-            image_size: Image size (1k, 2k for imagen-4)
             aspect_ratio: Aspect ratio ("1:1", "3:4", "4:3", "9:16", and "16:9" for imagen 4)
             add_random_suffix: Whether to add a random suffix to the prompt for ignoring cached from api provider
             save_path: Optional path to save the image
@@ -63,7 +62,6 @@ class ImageGenerator:
             "model": "imagen-4",
             "prompt": prompt if not add_random_suffix else f"{prompt} [Random suffix: {random.randint(1, 1000)}]",
             "n": n,
-            "imageSize": image_size,
             "aspectRatio": aspect_ratio,
         }
         
@@ -81,54 +79,21 @@ class ImageGenerator:
                 if b64_image:
                     image_data = ensure_bytes_from_base64(b64_image)
                     saved.append(image_data)
-                    save_images(image_data, f"{save_path}_{i}.png")
+                    if n > 1:
+                        save_images(image_data, f"{i}_{save_path}")
+                    else:
+                        save_images(image_data, save_path)
                 else:
                     print(f"Warning: No image data found for item {i}")        
         return saved
 
 
-    def chat_generate_image(
-        self,
-        prompt: str,
-        save_path: Optional[str] = None,
-    ) -> bytes:
-        """
-        Generate an image using the chat completions endpoint.
 
-        Args:
-            prompt: Text description of the image to generate
-            save_path: Optional path to save the generated image
-
-        Returns:
-            Bytes of the generated image
-        """
-        data = {
-            "model": "gemini-2.5-flash-image-preview",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "modalities": ["text", "image"],
-        }
-        
-        url = f"{self.base_url}/chat/completions"
-        response = self._session.post(url, data=json.dumps(data), timeout=self.timeout)
-        response.raise_for_status()
-        
-        result = response.json().get("choices", [])[0].get("message", {}).get("images", [])
-        base64_url = result[0].get("image_url").get("url")
-        image_data = ensure_bytes_from_base64(base64_url)
-        
-        if save_path:
-            save_images(image_data, save_path)
-
-        return image_data
-
-
-
-class ImageEditor:
+class ConversationalImageGenerator:
     """
-    Image editing capabilities.
-    Supports image-to-image (editing), image-to-image (editing), and chat-based generation.
+    Conversation-based image generation capabilities.
+    Supports conversation-based image generation with multi-turn conversation support.
+    Especially useful for generating list of images with consistent style, content, object, human, etc. in order to make a storyboard, comic, etc.
     """
     
     def __init__(self, client: ThucChienClient):
@@ -141,97 +106,145 @@ class ImageEditor:
         self.endpoint = "https://api.thucchien.ai/gemini/v1beta/models/gemini-2.5-flash-image-preview:generateContent"
         self._session = requests.Session()
         self._session.headers.update({
-            "x-google-api-key": self.api_key,
+            "x-goog-api-key": self.api_key,
             "Content-Type": "application/json"
         })
         self.timeout = 30
 
-
-    def edit_image(
+    def generate(
         self,
         prompt: str,
-        image: Union[str, bytes],
+        prev_contents: List[Dict[str, Any]] = [],
         aspect_ratio: Optional[str] = None,
-        extra_generation_config: Optional[Dict] = None,
-        save_path: Optional[str] = None,
-    ) -> bytes:
+        save_path: Optional[str] = None
+    ) -> (str, str):
         """
-        Edit an image with a text prompt.
-
+        Generate a new image from a text prompt.
+        
         Args:
-            prompt: Text description of the image to edit
-            image: Path to the input image or bytes of the image
-            aspect_ratio: Aspect ratio (one of "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9" and "21:9")
-            extra_generation_config: Optional extra generation config
-            save_path: Optional path to save the edited image
-
+            prompt (str): Text description of the image to generate
+            prev_contents (List[Dict[str, Any]], optional): List of history contents for providing context and history of the conversation to generate the image consistently with previous images
+                - contents format:  [
+                                        {
+                                            'role': 'user'/'model',
+                                            'parts':    [
+                                                            {'text': 'text'},
+                                                            {'inlineData': {'mime_type': '<mime_type>', 'data': '<base64_data>'}},
+                                                            ...
+                                                        ]
+                                        },
+                                        ...
+                                    ]
+            aspect_ratio (str): Aspect ratio of the generated image. Options:
+                - Landscape: "21:9", "16:9", "4:3", "3:2"
+                - Square: "1:1"
+                - Portrait: "9:16", "3:4", "2:3"
+                - Flexible: "5:4", "4:5"
+            save_path (str, optional): Path to save the generated image
+            
         Returns:
-            Bytes of the edited image
+            (generated_image_base64, generated_image_mime_type)
+
+
+        Example Usage:
+            - Use case 1: Generate a single image with a text prompt:
+                ```python
+                image_gen.generate(
+                    prompt="A serene mountain landscape at sunset with a lake reflecting the sky",
+                    aspect_ratio="16:9",
+                    save_path="outputs/moutain_landscape.png"
+                )
+                ```
+            - Use case 2:Edit an existing image:
+                ```python
+                image_gen.generate(
+                    prompt="Add a small boat on the lake",
+                    prev_contents=[
+                        {"role": "user", "parts": [{"inlineData": {"mime_type": "<mime_type_of_the_existing_image>", "data": "<base64_data_of_the_existing_image>"}}]},
+                    ],
+                    aspect_ratio="16:9",
+                    save_path="outputs/moutain_landscape_with_boat.png"
+                )
+                ```
+            - Use case 3: Generate a list of images with consistent object (MC) for a news report storyboard:
+                ```python
+                # image 1: Reporter portrait
+                reporter_portrait_prompt = "A close-up portrait of the reporter standing in front of a newsroom backdrop. Add an on-screen lower-third text: “Maria Chen — Senior Field Correspondent, Global News.” She wears a professional outfit (navy blazer, press badge, holding microphone with network logo). Calm and confident expression, ready to report."
+                reporter_portrait_mime_type, reporter_portrait_base64 = image_gen.generate(
+                    prompt=reporter_portrait_prompt,
+                    aspect_ratio="16:9",
+                    save_path="outputs/reporter_portrait.png"
+                )
+
+                # image 2: Reporter sitting at the anchor desk
+                reporter_sitting_prompt = "The reporter sits at the anchor desk in a modern TV studio. Multiple display screens show world maps and headlines. Bright, professional lighting and sleek digital graphics in the background."
+                reporter_sitting_mime_type, reporter_sitting_base64 = image_gen.generate(
+                    prompt=reporter_sitting_prompt,
+                    prev_contents=[
+                        {"role": "user", "parts": [{"text": reporter_portrait_prompt}]},
+                        {"role": "model", "parts": [{"inlineData": {"mime_type": reporter_portrait_mime_type, "data": reporter_portrait_base64}}]},
+                    ],
+                    aspect_ratio="16:9",
+                    save_path="outputs/reporter_sitting.png"
+                )
+                # image 3: Reporter reacting to urgent breaking news
+                reporter_breaking_news_prompt = "The same reporter reacts to urgent breaking news. Red “BREAKING NEWS” graphics flash behind her as she looks at a monitor, microphone on desk. Serious, focused demeanor."
+                reporter_breaking_news_mime_type, reporter_breaking_news_base64 = image_gen.generate(
+                    prompt=reporter_breaking_news_prompt,
+                    prev_contents=[
+                        {"role": "user", "parts": [{"text": reporter_portrait_prompt}]},
+                        {"role": "model", "parts": [{"inlineData": {"mime_type": reporter_portrait_mime_type, "data": reporter_portrait_base64}}]},
+                        {"role": "user", "parts": [{"text": reporter_sitting_prompt}]},
+                        {"role": "model", "parts": [{"inlineData": {"mime_type": reporter_sitting_mime_type, "data": reporter_sitting_base64}}]},
+                    ],
+                    aspect_ratio="16:9",
+                    save_path="outputs/reporter_breaking_news.png"
+                )
+
+                ...
+                ```
         """
 
-        b64, mime_type = to_base64(image)
-        data = {
+        payload = {
             "contents": [
+                *prev_contents,
                 {
+                    "role": "user",
                     "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": b64,
-                            }
-                        }
+                        {"text": prompt}
                     ]
                 }
             ],
-            "generationConfig": {}
         }
 
         if aspect_ratio:
-            data["generationConfig"]["imageConfig"] = {
-                "aspectRatio": aspect_ratio,
+            payload["generationConfig"] = {
+                "imageConfig": {
+                    "aspectRatio": aspect_ratio
+                }
             }
         
-        if extra_generation_config:
-            data["generationConfig"].update(extra_generation_config)
-        
-        response = self._session.post(self.endpoint, data=json.dumps(data), timeout=self.timeout)
+        response = self._session.post(self.endpoint, data=json.dumps(payload), timeout=self.timeout)
         response.raise_for_status()
 
         result = response.json()
 
-        inline = result["candidates"][0]["content"]["parts"][0]["inlineData"]
+        inline = None
+        for part in result["candidates"][0]["content"]["parts"]:
+            if "inlineData" in part:
+                inline = part["inlineData"]
+                break
+            elif "text" in part:
+                print(f"text: {part['text']}")
+
+        if not inline:
+            raise ValueError("No inline data found in the response")
+
         out_b64 = inline["data"]
+        out_mime_type = inline["mimeType"]
         image_data = ensure_bytes_from_base64(out_b64)
 
         if save_path:
             save_images(image_data, save_path)
 
-        return image_data
-
-
-if __name__ == "__main__":
-
-    client = ThucChienClient()
-    image_gen = ImageGenerator(client)
-    image_editor = ImageEditor(client)
-
-    # Example 3: Image editing (requires an existing image)
-    print("\n3️⃣  Image Editing")
-    print("-" * 60)
-    
-    # First, check if we have an image to edit
-    import os
-    if os.path.exists("outputs/standard_image_1.png"):
-        edit_prompt = "Add a small boat on the lake"
-        print(f"Edit prompt: {edit_prompt}")
-        
-        edited_image = image_editor.edit_image(
-            prompt=edit_prompt,
-            image="outputs/standard_image_1.png",
-            aspect_ratio="16:9",
-            save_path="outputs/edited_image.png"
-        )
-        print("✅ Image edited successfully")
-    else:
-        print("⚠️  No image found to edit. Run standard generation first.")
+        return out_b64, out_mime_type
