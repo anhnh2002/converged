@@ -48,6 +48,7 @@ outputs/
 
 # Except example outputs
 !outputs/.gitkeep
+.thucchien_chat_sessions/
 
 # OS
 .DS_Store
